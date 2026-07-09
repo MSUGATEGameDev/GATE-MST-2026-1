@@ -1,315 +1,240 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Diagnostics;
+using UnityEngine.UI;
 
-[RequireComponent(typeof(Rigidbody))]
-[RequireComponent(typeof(Health))]
-public class Entity : MonoBehaviour
+public class Enemy : Entity
 {
-    private Rigidbody rigid;
-    public Animator anim;
-    public Health health;
-    [SerializeField] private Transform groundCheck;
-    [SerializeField] private Transform attackPoint;
+    [Header("Enemy Parts")]
 
-    public LayerMask pushableLayers;
-    private GameObject curPushable;
+    public GameObject healthBarHolder;
+    public Transform healthBar;
+    public Image healthBarImage;
+    public float searchRate = 2f;
+    public float randomRate = 2f;
+    private float nextSearchTime = 0f;
+    private float nextRandomTime = 0f;
 
-    [SerializeField] private GameObject[] entityLights;
-    [SerializeField] private GameObject[] entityDamageLights;
+    //private float turnTime = 0.1f;
+    //private float turnVel;
 
-    public float moveSpeed = 2.0f;
-    public float runSpeed = 5.0f;
-    public float jumpForce = 2.5f;
-    public float attackRate = 2f;
+    private Vision vision;
 
-    public LayerMask attackableLayers;
-    public float attackRadius = 0.5f;
-    public int attackDamage = 5;
+    private int searchIndex = 0;
+    public AIStates curAIState = AIStates.idle;
 
-    private float turnTime = 0.1f;
-    private float turnVel;
+    [HideInInspector] public EnemySpawner spawner;
+    [Tooltip("The actions that will be carried out when the enemy dies.")]public List<GameAction> actions = new();
 
-    private Vector2 curDir = Vector2.zero;
-    private float dirInfluence = 0f;
-    public bool running = false;
-    public bool pushing = false;
-
-    public EStates curState = EStates.idle;
-    public bool disabled = false;
-
-    private float nextAttackTime = 0f;
-
-    //Damage Indcator Timers
-    private bool damageLightActive = false;
-    private float nextdamageLightTime = 0f;
-
-    public enum EStates
+    public enum AIStates
     {
-        disabled,
         idle,
-        falling,
-        walking,
-        running,
-        pushing,
-        dead,
+        wander,
+        roomba,
+        searching,
+        pursue,
     }
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    protected virtual void Start()
+    protected override void Start()
     {
-        rigid = GetComponent<Rigidbody>();
-        anim = GetComponentInChildren<Animator>();
-        health = GetComponent<Health>();
+        base.Start();
+        vision = GetComponent<Vision>();
     }
-
-    // Update is called once per frame
-    protected virtual void Update()
+    public void DisplayHealth(float percentage)
     {
-        DetermineState();
-        if (damageLightActive)
+        if(percentage > 0)
         {
-            if (Time.time >= nextdamageLightTime)
+            healthBarHolder.SetActive(true);
+            healthBar.localScale = new Vector3(percentage / 100, 1, 1);
+            if (percentage > 50)
             {
-                damageLightActive = false;
-                foreach (GameObject light in entityDamageLights)
-                {
-                    Renderer lightRenderer = light.GetComponent<Renderer>();
-                    lightRenderer.material.DisableKeyword("_EMISSION");
-                    lightRenderer.material.SetColor("_EmissionColor", Color.black);
-                }
-            }
-        }
-    }
-
-    protected virtual void FixedUpdate()
-    {
-        HandleMove();
-    }
-
-    public void Move(Vector2 dir)
-    {
-        curDir = dir;
-    }
-
-    public void InfluenceMove(float influence)
-    {
-        dirInfluence = influence;
-    }
-
-    private void HandleMove()
-    {
-        if (curState != EStates.dead && curState != EStates.disabled) {
-            Vector3 normalDir = new Vector3(curDir.x, 0f, curDir.y).normalized;
-
-            if (normalDir.magnitude >= 0.1f)
-            {
-                float targetAngle = Mathf.Atan2(normalDir.x, normalDir.z) * Mathf.Rad2Deg + dirInfluence;
-                float angle = Mathf.SmoothDampAngle(transform.localEulerAngles.y, targetAngle, ref turnVel, turnTime);
-                transform.rotation = Quaternion.Euler(0f, angle, 0f);
-
-                Vector3 vel = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
-
-                HandlePush(vel, targetAngle);
-
-                if (curState == EStates.pushing & curPushable != null)
-                {
-                    vel *= moveSpeed;
-                    anim.SetBool("pushing", true);
-                    anim.SetBool("walking", false);
-                    anim.SetBool("running", false);
-                }
-                else if (curState == EStates.running)
-                {
-                    vel *= runSpeed;
-                    anim.SetBool("walking", false);
-                    anim.SetBool("pushing", false);
-                    anim.SetBool("running", true);
-                }
-                else
-                {
-                    vel *= moveSpeed;
-                    anim.SetBool("running", false);
-                    anim.SetBool("pushing", false);
-                    anim.SetBool("walking", true);
-                }
-
-                vel.y = rigid.linearVelocity.y;
-
-                if (curState == EStates.falling)
-                {
-                    StopMoveAnims();
-                    rigid.AddForce(vel);
-                }
-                else
-                {
-                    rigid.linearVelocity = vel;
-                }
+                healthBarImage.color = new Color((50 - (percentage - 50)) / 50, 1, 0);
             }
             else
             {
-                StopMoveAnims();
+                healthBarImage.color = new Color(1, percentage / 50, 0);
             }
-        } else
-        {
-            StopMoveAnims();
-        }
-        
-    }
-
-    private void StopMoveAnims()
-    {
-        anim.SetBool("walking", false);
-        anim.SetBool("running", false);
-        anim.SetBool("pushing", false);
-    }
-
-    public void setEntityLights(Color color)
-    {
-        try
-        {
-            foreach (GameObject light in entityLights)
-            {
-                Renderer lightRenderer = light.GetComponent<Renderer>();
-                lightRenderer.material.SetColor("_BaseColor", color);
-                lightRenderer.material.SetColor("_EmissionColor", color);
-            }
-        }
-        catch
-        {
-            print("No entity lights set!");
-        }
-    }
-
-    private void HandlePush(Vector3 fVector, float tAngle)
-    {
-        if (curPushable == null && pushing)
-        {
-            Collider[] hitObjects = Physics.OverlapSphere(attackPoint.position, attackRadius, pushableLayers);
-
-            foreach (Collider hitObject in hitObjects)
-            {
-                if (hitObject.CompareTag("Pushable"))
-                {
-                    curPushable = hitObject.gameObject;
-                    break;
-                }
-            }
-        }
-        else if (pushing)
-        {
-            Vector3 newPos = transform.position + fVector;
-            newPos.y = curPushable.transform.position.y;
-            curPushable.transform.rotation = Quaternion.Euler(0f, tAngle, 0f);
-            curPushable.transform.position = newPos;
         }
         else
         {
-            curPushable = null;
+            healthBarHolder.SetActive(false);
         }
     }
-    public void Jump()
+    protected override void Update()
     {
-        if(curState != EStates.dead && curState != EStates.disabled && !pushing){
-            //Check if Jump is Possible
-            if (curState != EStates.falling)
+        if (curState != EStates.dead)
+        {
+            base.Update();
+
+            if (vision.canSeeTarget)
             {
-                rigid.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+                searchIndex = 0;
+                curAIState = AIStates.pursue;
+            }
+            else if (curAIState == AIStates.pursue)
+            {
+                searchIndex = 0;
+                curAIState = AIStates.searching;
+                
+            }
+
+            if (Time.time >= nextRandomTime)
+            {
+                if (curAIState == AIStates.wander || curAIState == AIStates.idle)
+                {
+                    curAIState = (AIStates)Random.Range(0, 2);
+                }
+
+                nextRandomTime = Time.time + randomRate;
+            }
+
+            switch (curAIState)
+            {
+                case AIStates.idle:
+                    setEntityLights(Color.white);
+                    Move(Vector2.zero);
+                    break;
+                case AIStates.wander:
+                    setEntityLights(Color.white);
+                    Wander();
+                    break;
+                case AIStates.searching:
+                    setEntityLights(Color.yellow);
+                    Move(Vector2.zero);
+                    Search();
+                    break;
+                case AIStates.roomba:
+                    setEntityLights(Color.white);
+                    Move(Vector2.zero);
+                    Search();
+                    break;
+                case AIStates.pursue:
+                    setEntityLights(Color.red);
+                    Move(Vector2.zero);
+                    Pursue();
+                    break;
             }
         }
     }
 
-    public void Attack()
+    public void Wander()
     {
-        //string curAnim = anim.GetCurrentAnimatorClipInfo(0)[0].clip.name;
-        //&& curAnim != "TutBotPunch"
-        if (Time.time >= nextAttackTime && curState != EStates.dead && curState != EStates.disabled && !pushing && Player.singleton.curState != EStates.dead)
+        if (curState == EStates.idle)
         {
-            anim.Play("TutBotPunch", 0, 0);
-
-            Collider[] hitEntitys = Physics.OverlapSphere(attackPoint.position, attackRadius, attackableLayers);
-
-            foreach (Collider hitEntity in hitEntitys)
-            {
-                Health eHealth = hitEntity.GetComponent<Health>();
-                if (eHealth != null)
-                {
-                    //print(health.TeamID);
-                    if (health == null || eHealth.TeamID != health.TeamID)
-                    {
-                        Debug.Log($"{hitEntity.name} got hit by {this.name}, dealed {attackDamage} Damage");
-                        eHealth.Damage(attackDamage);
-                    }
-                }
-            }
-            nextAttackTime = Time.time + 1f / attackRate;
+            running = false;
+            Move(EntityUtils.HeadingToVec2(EntityUtils.GetRandomHeading()));
         }
     }
 
-    public void Damaged()
+    public void Pursue()
     {
-        try
+        if (vision.targetObject == null) return;
+        Vector3 heading = vision.targetObject.transform.position - transform.position;
+        float distance = heading.magnitude;
+        Vector3 direction = heading / distance;
+
+        Vector2 vec = new Vector2(direction.x, direction.z);
+
+        if (distance > 1f)
         {
-            nextdamageLightTime = Time.time + 0.5f;
-            damageLightActive = true;
-            foreach (GameObject light in entityDamageLights)
-            {
-                Renderer lightRenderer = light.GetComponent<Renderer>();
-                lightRenderer.material.EnableKeyword("_EMISSION");
-                lightRenderer.material.SetColor("_EmissionColor", Color.red * 2);
-            }
+            running = true;
+            Move(vec);
         }
-        catch
+        else
         {
-            print("No Damage lights set!");
+            running = false;
+            Move(Vector2.zero);
+            Attack();
         }
     }
 
-    public virtual void Die()
+    public void Roomba()
     {
-        curState = EStates.dead;
-        anim.enabled = false;
-    }
+        running = false;
+        Move(EntityUtils.HeadingToVec2((Headings)searchIndex));
 
-    public virtual void DetermineState()
-    {
-        if (curState != EStates.dead & !disabled)
+        if (Time.time >= nextSearchTime)
         {
-            if (!Physics.Raycast(groundCheck.position, -1 * transform.up, .1f) && rigid.linearVelocity.magnitude > .05f) // Treats being on top of something and no longer falling as being on the ground. If not, player will get stuck on things.
+            if (searchIndex < 8)
             {
-                curState = EStates.falling;
-            }
-            else if (rigid.linearVelocity.magnitude > 0)
-            {
-                if (pushing)
-                {
-                    curState = EStates.pushing;
-                }
-                else if (running)
-                {
-                    curState = EStates.running;
-                }
-                else
-                {
-                    curState = EStates.walking;
-                }
+                searchIndex++;
             }
             else
             {
-                curState = EStates.idle;
+                searchIndex = 0;
+                curAIState = AIStates.wander;
             }
-
-        }
-        else if (disabled)
-        {
-            curState = EStates.disabled;
+            nextSearchTime = Time.time + searchRate;
         }
     }
 
-    private void OnDrawGizmosSelected()
+    public void Search()
     {
-        if (attackPoint == null)
-            return;
+        running = false;
+        Move(EntityUtils.HeadingToVec2((Headings)searchIndex));
 
-        Gizmos.DrawWireSphere(attackPoint.position, attackRadius);
+        if (Time.time >= nextSearchTime)
+        {
+            if (searchIndex < 8)
+            {
+                searchIndex++;
+            }
+            else
+            {
+                searchIndex = 0;
+                curAIState = AIStates.wander;
+            }
+            nextSearchTime = Time.time + searchRate;
+        }
+    }
+
+    public override void Die()
+    {
+        if(curState != EStates.dead)
+        {
+            base.Die();
+            healthBarHolder.SetActive(false);
+            if (spawner != null)
+            {
+                spawner.ReportDeath();
+            }
+            foreach (GameAction action in actions)
+            {
+                action.Activate();
+            }
+            foreach (MeshRenderer mr in GetComponentsInChildren<MeshRenderer>())
+            {
+                try { mr.gameObject.AddComponent<BoxCollider>(); } catch { }
+                try
+                {
+                    mr.gameObject.AddComponent<Rigidbody>().useGravity = true;
+                }
+                catch { }
+            }
+            
+            StartCoroutine(Despawn());
+        }
+    }
+    IEnumerator Despawn()
+    {
+        yield return new WaitForSeconds(5);
+        Destroy(gameObject);
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (curAIState == AIStates.idle || curAIState == AIStates.wander)
+        {
+            curAIState = AIStates.roomba;
+        }
+    }
+
+    private void OnCollisionExit(Collision collision)
+    {
+        if (curAIState == AIStates.roomba)
+        {
+            curAIState = AIStates.idle;
+        }
     }
 }
