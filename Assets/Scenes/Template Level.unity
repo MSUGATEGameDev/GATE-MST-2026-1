@@ -411,9 +411,6 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 7460507922178101452, guid: 6bcbd75a4bd4dba45802087238127d31, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1239176511}
     - targetCorrespondingSourceObject: {fileID: 6301760703050895150, guid: 6bcbd75a4bd4dba45802087238127d31, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
@@ -6957,27 +6954,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1eda6ba97a9e62445a9807503ec38006, type: 3}
---- !u!1 &1239176505 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 7460507922178101452, guid: 6bcbd75a4bd4dba45802087238127d31, type: 3}
-  m_PrefabInstance: {fileID: 53671258}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1239176511
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1239176505}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ae8c34c495700ec4cb274525b9afbb3a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::HideForGame
-  _: '-- Tool --
-
-    Attach to any visual object to allow it to be seen in the editor
-    but not the game.'
 --- !u!1001 &1241817821
 PrefabInstance:
   m_ObjectHideFlags: 0
